@@ -1,1 +1,1 @@
-# home-assistant-blueprints
+# homeassistant
