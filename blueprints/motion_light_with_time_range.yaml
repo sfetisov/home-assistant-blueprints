@@ -1,6 +1,6 @@
 blueprint:
-  name: Motion-activated Light with Time Range condition
-  description: Turn on a light when motion is detected.
+  name: Motion-activated Light or Switch with Time Range condition
+  description: Turn on a light when motion is detected within a specified time range.
   domain: automation
   source_url: https://github.com/home-assistant/core/blob/dev/homeassistant/components/automation/blueprints/motion_light.yaml
   input:
@@ -10,8 +10,16 @@ blueprint:
         entity:
           domain: binary_sensor
           device_class: motion
+    switch_target:
+      name: Switch
+      default: {}
+      selector:
+        target:
+          entity:
+            domain: switch
     light_target:
       name: Light
+      default: {}
       selector:
         target:
           entity:
@@ -28,12 +36,12 @@ blueprint:
     start_time:
       name: Start Time
       description: Time action should start
-      default: "9:00:00"
+      default: "8:00:00"
       selector:
         time:
     end_time:
       name: End Time
-      default: "00:00:00"
+      default: "21:00:00"
       description: Time action should stop
       selector:
         time:
@@ -48,25 +56,47 @@ trigger:
   entity_id: !input motion_entity
   from: "off"
   to: "on"
+variables:
+  light_target: !input light_target
+  switch_target: !input switch_target
 condition:
-  alias: "Time 9~00"
+  alias: "Time 8~21"
   condition: time
   # At least one of the following is required.
   after: !input start_time
   before: !input end_time
 action:
-  - alias: "Turn on the light"
-    service: light.turn_on
-    target: !input light_target
-  - alias: "Wait until there is no motion from device"
-    wait_for_trigger:
-      platform: state
-      entity_id: !input motion_entity
-      from: "on"
-      to: "off"
-  - alias: "Wait the number of seconds that has been set"
-    delay: !input no_motion_wait
-  - alias: "Turn off the light"
-    service: light.turn_off
-    target: !input light_target
+  - choose:
+      - conditions: "{{ switch_target|length > 0 }}"
+        sequence:
+          - alias: "Turn on the switch"
+            service: switch.turn_on
+            target: !input switch_target
+          - alias: "Wait until there is no motion from device"
+            wait_for_trigger:
+              - platform: state
+                entity_id: !input motion_entity
+                from: "on"
+                to: "off"
+          - alias: "Wait the number of seconds that has been set"
+            delay: !input no_motion_wait
+          - alias: "Turn off the switch"
+            service: switch.turn_off
+            target: !input switch_target
+      - conditions: "{{ light_target|length > 0 }}"
+        sequence:
+          - alias: "Turn on the light"
+            service: light.turn_on
+            target: !input light_target
+          - alias: "Wait until there is no motion from device"
+            wait_for_trigger:
+              - platform: state
+                entity_id: !input motion_entity
+                to: 'off'
+          - alias: "Wait the number of seconds that has been set"
+            delay: !input no_motion_wait
+          - alias: "Turn off the light"
+            service: light.turn_off
+            target: !input light_target
+    default: []
 
